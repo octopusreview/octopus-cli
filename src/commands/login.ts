@@ -17,12 +17,19 @@ function openBrowser(url: string): void {
     throw new Error("Invalid authorization URL");
   }
 
+  let child;
   if (process.platform === "win32") {
-    spawn("cmd", ["/c", "start", "", url], { detached: true, stdio: "ignore" }).unref();
+    // Use cmd /c start with the URL wrapped in double quotes to handle special chars like ? and &
+    child = spawn("cmd", ["/c", "start", "", `"${url}"`], { detached: true, stdio: "ignore", shell: true });
   } else {
     const cmd = process.platform === "darwin" ? "open" : "xdg-open";
-    spawn(cmd, [url], { detached: true, stdio: "ignore" }).unref();
+    child = spawn(cmd, [url], { detached: true, stdio: "ignore" });
   }
+
+  child.on("error", () => {
+    // Silently ignore — the URL is already printed for manual copy
+  });
+  child.unref();
 }
 
 async function deviceFlow(apiUrl: string, profile: string): Promise<void> {
