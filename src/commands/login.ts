@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { spawn } from "node:child_process";
+import { exec } from "node:child_process";
 import { setProfile, getApiUrl } from "../lib/config-store.js";
 import { success, error, info } from "../lib/output.js";
 import { withSpinner } from "../lib/spinner.js";
@@ -17,19 +17,12 @@ function openBrowser(url: string): void {
     throw new Error("Invalid authorization URL");
   }
 
-  let child;
   if (process.platform === "win32") {
-    // Use cmd /c start with the URL wrapped in double quotes to handle special chars like ? and &
-    child = spawn("cmd", ["/c", "start", "", `"${url}"`], { detached: true, stdio: "ignore", shell: true });
+    exec(`start "" "${url}"`);
   } else {
     const cmd = process.platform === "darwin" ? "open" : "xdg-open";
-    child = spawn(cmd, [url], { detached: true, stdio: "ignore" });
+    exec(`${cmd} "${url}"`);
   }
-
-  child.on("error", () => {
-    // Silently ignore — the URL is already printed for manual copy
-  });
-  child.unref();
 }
 
 async function deviceFlow(apiUrl: string, profile: string): Promise<void> {

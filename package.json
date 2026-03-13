@@ -1,6 +1,6 @@
 {
   "name": "@octp/cli",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "description": "CLI tool for Octopus — AI-powered PR review and codebase intelligence",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,7 +15,10 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .turbo node_modules"
   },
-  "files": ["dist", "bin"],
+  "files": [
+    "dist",
+    "bin"
+  ],
   "dependencies": {
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
