@@ -106,3 +106,51 @@ export async function apiStream(
     }
   }
 }
+
+/**
+ * SSE stream reader — for endpoints that use `event: X\ndata: Y\n\n` format.
+ */
+export async function apiSSE(
+  path: string,
+  body: unknown,
+  onEvent: (event: string, data: Record<string, unknown>) => void,
+): Promise<void> {
+  const url = `${getApiUrl()}${path}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
+    throw new ApiError(res.status, data.error ?? res.statusText);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("No response body");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let currentEvent = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (line.startsWith("event: ")) {
+        currentEvent = line.slice(7);
+      } else if (line.startsWith("data: ") && currentEvent) {
+        try {
+          onEvent(currentEvent, JSON.parse(line.slice(6)));
+        } catch {}
+        currentEvent = "";
+      }
+    }
+  }
+}

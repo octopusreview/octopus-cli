@@ -7,6 +7,7 @@ import { usageCommand } from "./commands/usage.js";
 import { repoCommand } from "./commands/repo/index.js";
 import { prCommand } from "./commands/pr/index.js";
 import { knowledgeCommand } from "./commands/knowledge/index.js";
+import { analyzeDepsCommand } from "./commands/analyze-deps.js";
 
 const program = new Command();
 
@@ -23,5 +24,6 @@ program.addCommand(usageCommand);
 program.addCommand(repoCommand);
 program.addCommand(prCommand);
 program.addCommand(knowledgeCommand);
+program.addCommand(analyzeDepsCommand);
 
 program.parse();
