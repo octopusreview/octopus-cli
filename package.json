@@ -1,6 +1,6 @@
 {
   "name": "@octp/cli",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "CLI tool for Octopus — AI-powered PR review and codebase intelligence",
   "type": "module",
   "main": "./dist/index.js",
@@ -17,7 +17,8 @@
   },
   "files": [
     "dist",
-    "bin"
+    "bin",
+    "src/skiils"
   ],
   "dependencies": {
     "chalk": "^5.4.1",
