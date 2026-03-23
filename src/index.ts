@@ -8,6 +8,7 @@ import { repoCommand } from "./commands/repo/index.js";
 import { prCommand } from "./commands/pr/index.js";
 import { knowledgeCommand } from "./commands/knowledge/index.js";
 import { analyzeDepsCommand } from "./commands/analyze-deps.js";
+import { skillsCommand } from "./commands/skills.js";
 
 const program = new Command();
 
@@ -25,5 +26,6 @@ program.addCommand(repoCommand);
 program.addCommand(prCommand);
 program.addCommand(knowledgeCommand);
 program.addCommand(analyzeDepsCommand);
+program.addCommand(skillsCommand);
 
 program.parse();
