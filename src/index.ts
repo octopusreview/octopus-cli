@@ -9,6 +9,7 @@ import { prCommand } from "./commands/pr/index.js";
 import { knowledgeCommand } from "./commands/knowledge/index.js";
 import { analyzeDepsCommand } from "./commands/analyze-deps.js";
 import { skillsCommand } from "./commands/skills.js";
+import { agentCommand } from "./commands/agent/index.js";
 
 const program = new Command();
 
@@ -27,5 +28,6 @@ program.addCommand(prCommand);
 program.addCommand(knowledgeCommand);
 program.addCommand(analyzeDepsCommand);
 program.addCommand(skillsCommand);
+program.addCommand(agentCommand);
 
 program.parse();

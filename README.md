@@ -203,6 +203,44 @@ Remove a document from the knowledge base.
 octopus knowledge remove cm3x1234
 ```
 
+### `octopus skills list`
+
+List available Octopus skills and their install status for Claude Code and Codex.
+
+```
+$ octopus skills list
+
+  Skill        Description                                                        Claude  Codex
+  octopus-fix  Check open PRs for review comments, apply fixes, and push updates  yes     no
+```
+
+### `octopus skills install`
+
+Install Octopus skills for AI coding agents. By default installs for both Claude Code and Codex.
+
+```bash
+# Install for both Claude Code and Codex
+octopus skills install
+
+# Install only for Claude Code
+octopus skills install --claude
+
+# Install only for Codex
+octopus skills install --codex
+```
+
+Once installed, you can use the skills as slash commands:
+- **Claude Code**: `/octopus-fix`
+- **Codex**: Automatically available as a skill
+
+### `octopus analyze-deps <repo-url>`
+
+Analyze npm dependencies in a GitHub repository for security risks. Streams results in real-time with risk categorization.
+
+```bash
+octopus analyze-deps https://github.com/acme/backend
+```
+
 ### `octopus usage`
 
 Show your organization's monthly usage, spend, and credit balance.
