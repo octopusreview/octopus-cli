@@ -1,4 +1,7 @@
 import { Command } from "commander";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { loginCommand } from "./commands/login.js";
 import { logoutCommand } from "./commands/logout.js";
 import { whoamiCommand } from "./commands/whoami.js";
@@ -11,12 +14,15 @@ import { analyzeDepsCommand } from "./commands/analyze-deps.js";
 import { skillsCommand } from "./commands/skills.js";
 import { agentCommand } from "./commands/agent/index.js";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8"));
+
 const program = new Command();
 
 program
   .name("octopus")
   .description("Octopus CLI — AI-powered PR review and codebase intelligence")
-  .version("0.1.0");
+  .version(pkg.version);
 
 program.addCommand(loginCommand);
 program.addCommand(logoutCommand);
