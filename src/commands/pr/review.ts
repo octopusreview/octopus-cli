@@ -31,22 +31,32 @@ function parsePrArg(arg: string): { prNumber: number; repoFullName?: string } {
   throw new Error(`Invalid PR identifier: "${arg}". Use a PR number or URL.`);
 }
 
+export async function reviewAction(prArg: string | undefined, opts: { pr?: string }) {
+  const resolved = prArg ?? opts.pr;
+  if (!resolved) {
+    error("Missing PR identifier. Usage: octopus review <pr> or octopus review --pr <pr>");
+    process.exit(1);
+  }
+  try {
+    const spinner = createSpinner("Resolving pull request...").start();
+    const { prNumber, repoFullName } = parsePrArg(resolved);
+
+    const repo = await resolveRepo(repoFullName);
+    spinner.text = `Starting review for ${repo.fullName} PR #${prNumber}...`;
+
+    await apiPost(`/api/cli/repos/${repo.id}/review`, { prNumber });
+    spinner.succeed(`Review triggered for ${repo.fullName} PR #${prNumber}`);
+    info("The review will be posted as a comment on the PR when complete.");
+  } catch (err: unknown) {
+    error(err instanceof Error ? err.message : "Failed to trigger review");
+    process.exit(1);
+  }
+}
+
+export const PR_ARG_DESC = "PR number or URL (e.g. 123 or https://github.com/owner/repo/pull/123)";
+
 export const prReviewCommand = new Command("review")
-  .argument("<pr>", "PR number or URL (e.g. 123 or https://github.com/owner/repo/pull/123)")
+  .argument("[pr]", PR_ARG_DESC)
+  .option("--pr <pr>", PR_ARG_DESC)
   .description("Trigger an AI review on a pull request")
-  .action(async (prArg: string) => {
-    try {
-      const spinner = createSpinner("Resolving pull request...").start();
-      const { prNumber, repoFullName } = parsePrArg(prArg);
-
-      const repo = await resolveRepo(repoFullName);
-      spinner.text = `Starting review for ${repo.fullName} PR #${prNumber}...`;
-
-      await apiPost(`/api/cli/repos/${repo.id}/review`, { prNumber });
-      spinner.succeed(`Review triggered for ${repo.fullName} PR #${prNumber}`);
-      info("The review will be posted as a comment on the PR when complete.");
-    } catch (err: unknown) {
-      error(err instanceof Error ? err.message : "Failed to trigger review");
-      process.exit(1);
-    }
-  });
+  .action(reviewAction);

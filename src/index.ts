@@ -9,6 +9,7 @@ import { configCommand } from "./commands/config.js";
 import { usageCommand } from "./commands/usage.js";
 import { repoCommand } from "./commands/repo/index.js";
 import { prCommand } from "./commands/pr/index.js";
+import { reviewAction, PR_ARG_DESC } from "./commands/pr/review.js";
 import { knowledgeCommand } from "./commands/knowledge/index.js";
 import { analyzeDepsCommand } from "./commands/analyze-deps.js";
 import { skillsCommand, checkSkillUpdates } from "./commands/skills.js";
@@ -41,6 +42,14 @@ program.addCommand(knowledgeCommand);
 program.addCommand(analyzeDepsCommand);
 program.addCommand(skillsCommand);
 program.addCommand(agentCommand);
+
+// Top-level alias: `octopus review` → `octopus pr review`
+program
+  .command("review")
+  .argument("[pr]", PR_ARG_DESC)
+  .option("--pr <pr>", PR_ARG_DESC)
+  .description("Trigger an AI review on a pull request (alias for 'pr review')")
+  .action(reviewAction);
 
 // Non-blocking startup check for skill updates
 checkSkillUpdates();
