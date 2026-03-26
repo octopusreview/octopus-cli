@@ -1,7 +1,9 @@
 import { Command } from "commander";
-import { hostname } from "node:os";
-import { existsSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { hostname, homedir } from "node:os";
+import { existsSync, writeFileSync, mkdirSync } from "node:fs";
+import { execSync, spawn } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import chalk from "chalk";
 import { apiPost, apiGet } from "../../lib/api-client.js";
 import { getApiUrl, getApiToken } from "../../lib/config-store.js";
@@ -9,6 +11,8 @@ import { success, error, warn, info } from "../../lib/output.js";
 import { loadWatchConfig, type WatchEntry } from "./watch.js";
 import { semanticSearch, grepSearch, fileReadSearch } from "./searcher.js";
 import { hasClaudeCli, claudeSearch } from "./claude-searcher.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 interface RegisterResponse {
   agentId: string;
@@ -79,12 +83,49 @@ function resolveWatchedRepos(): Map<string, string> {
 export const startCommand = new Command("start")
   .description("Start the local agent daemon")
   .option("--with-claude", "Enable Claude CLI for deep semantic search")
-  .option("--verbose", "Show detailed logs")
-  .action(async (opts: { withClaude?: boolean; verbose?: boolean }) => {
+  .option("--verbose", "Run in foreground with detailed logs")
+  .option("--foreground", "Run in foreground (without verbose logs)")
+  .action(async (opts: { withClaude?: boolean; verbose?: boolean; foreground?: boolean }) => {
     const token = getApiToken();
     if (!token) {
       error("Not logged in. Run 'octopus login' first.");
       process.exit(1);
+    }
+
+    const runInForeground = opts.verbose || opts.foreground;
+
+    // Default: background mode — spawn detached child and exit
+    if (!runInForeground) {
+      const binPath = join(__dirname, "..", "..", "..", "bin", "octopus.js");
+      if (!existsSync(binPath)) {
+        error(`Could not locate agent binary at: ${binPath}`);
+        process.exit(1);
+      }
+
+      const args = [binPath, "agent", "start", "--foreground"];
+      if (opts.withClaude) args.push("--with-claude");
+
+      const child = spawn(process.execPath, args, {
+        detached: true,
+        stdio: "ignore",
+      });
+
+      child.on("error", (err) => {
+        error(`Failed to start background agent: ${err.message}`);
+        process.exit(1);
+      });
+
+      child.unref();
+
+      // Write PID file for manageability
+      const pidDir = join(homedir(), ".octopus");
+      mkdirSync(pidDir, { recursive: true });
+      const pidFile = join(pidDir, "agent.pid");
+      writeFileSync(pidFile, String(child.pid));
+
+      success(`Agent started in background (PID: ${child.pid})`);
+      info(`PID saved to ${pidFile}. To stop: kill $(cat ${pidFile})`);
+      process.exit(0);
     }
 
     // Resolve watched repos
@@ -133,6 +174,8 @@ export const startCommand = new Command("start")
       process.exit(1);
     }
 
+    const verbose = opts.verbose ?? false;
+
     // Heartbeat interval
     const heartbeatInterval = setInterval(async () => {
       try {
@@ -147,11 +190,11 @@ export const startCommand = new Command("start")
           agentId,
           repoFullNames: freshNames,
         });
-        if (opts.verbose) {
+        if (verbose) {
           info(`Heartbeat sent (${freshNames.length} repos)`);
         }
       } catch (err) {
-        if (opts.verbose) {
+        if (verbose) {
           warn(`Heartbeat failed: ${err instanceof Error ? err.message : err}`);
         }
       }
@@ -163,15 +206,18 @@ export const startCommand = new Command("start")
         const res = await apiGet<{ tasks: SearchTask[] }>(
           `/api/agent/tasks?agentId=${agentId}`,
         );
+        if (verbose && res.tasks.length > 0) {
+          info(`Received ${res.tasks.length} task(s)`);
+        }
         for (const task of res.tasks) {
-          handleTask(task, repoMap, agentId, claudeAvailable, opts.verbose ?? false);
+          handleTask(task, repoMap, agentId, claudeAvailable, verbose);
         }
       } catch (err) {
-        if (opts.verbose) {
+        if (verbose) {
           warn(`Poll failed: ${err instanceof Error ? err.message : err}`);
         }
       }
-    }, 5_000);
+    }, 2_000);
 
     // Graceful shutdown
     const cleanup = async () => {
@@ -193,7 +239,15 @@ export const startCommand = new Command("start")
 
     console.log("");
     success(`Agent running. Listening for search requests...`);
-    info(`Press Ctrl+C to stop.\n`);
+    if (verbose) {
+      info("Verbose mode enabled — showing all activity logs.");
+      info(`Agent ID: ${agentId}`);
+      info(`Repos: ${repoFullNames.join(", ")}`);
+      info(`Polling every 2s, heartbeat every 30s`);
+      info(`Press Ctrl+C to stop.\n`);
+    } else {
+      info(`Press Ctrl+C to stop.\n`);
+    }
   });
 
 /**
