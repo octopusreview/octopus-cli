@@ -1,154 +1,401 @@
 import { Command } from "commander";
-import { readdir, readFile, mkdir, writeFile, access } from "node:fs/promises";
-import { resolve, join, dirname, basename } from "node:path";
-import { fileURLToPath } from "node:url";
+import { mkdir, writeFile, readFile, unlink } from "node:fs/promises";
+import { join, basename } from "node:path";
 import { homedir } from "node:os";
+import { createHash } from "node:crypto";
 import chalk from "chalk";
-import { success, error, info, table } from "../lib/output.js";
+import { success, error, info, warn, table } from "../lib/output.js";
+import { withSpinner } from "../lib/spinner.js";
+import { getApiUrl } from "../lib/config-store.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const COMMANDS_DIR = join(process.cwd(), ".claude", "commands");
+const STATE_DIR = join(homedir(), ".octopus");
+const STATE_FILE = join(STATE_DIR, "skills-state.json");
 
-const SKILLS_DIR = resolve(__dirname, "..", "..", "src", "skiils");
+// --- Types ---
 
-const CLAUDE_DIR = join(homedir(), ".claude", "commands");
-const CODEX_DIR = join(homedir(), ".agents", "skills");
-
-interface SkillMeta {
-  fileName: string;
+interface SkillEntry {
   name: string;
+  title: string;
   description: string;
+  filename: string;
+  hash: string;
 }
 
-function parseSkillFrontmatter(content: string): { name: string; description: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return { name: "", description: "" };
-
-  const fm = match[1];
-  const name = fm.match(/(?:^|\n)name:\s*(.+)/)?.[1]?.trim() ?? "";
-  const desc =
-    fm.match(/(?:^|\n)description:\s*(.+)/)?.[1]?.trim() ?? "";
-  return { name, description: desc };
+interface SkillsManifest {
+  version: number;
+  skills: SkillEntry[];
 }
 
-async function getSkills(): Promise<SkillMeta[]> {
+interface InstalledSkillState {
+  hash: string;
+  installedAt: string;
+}
+
+interface SkillsState {
+  lastKnownVersion: number;
+  lastCheckedAt: string;
+  installed: Record<string, InstalledSkillState>;
+}
+
+// --- State persistence ---
+
+async function loadState(): Promise<SkillsState> {
   try {
-    const files = await readdir(SKILLS_DIR);
-    const skills: SkillMeta[] = [];
-    for (const file of files) {
-      if (!file.endsWith(".md")) continue;
-      const content = await readFile(join(SKILLS_DIR, file), "utf-8");
-      const { name, description } = parseSkillFrontmatter(content);
-      skills.push({
-        fileName: file,
-        name: name || file.replace(/\.md$/, ""),
-        description,
-      });
-    }
-    return skills;
+    const data = await readFile(STATE_FILE, "utf-8");
+    return JSON.parse(data);
   } catch {
-    return [];
+    return { lastKnownVersion: 0, lastCheckedAt: "", installed: {} };
   }
 }
 
-async function exists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
+async function saveState(state: SkillsState): Promise<void> {
+  await mkdir(STATE_DIR, { recursive: true });
+  await writeFile(STATE_FILE, JSON.stringify(state, null, 2), "utf-8");
 }
 
-async function installForClaude(skills: SkillMeta[]): Promise<number> {
-  await mkdir(CLAUDE_DIR, { recursive: true });
-  let count = 0;
-  for (const skill of skills) {
-    const src = join(SKILLS_DIR, skill.fileName);
-    const dest = join(CLAUDE_DIR, skill.fileName);
-    const content = await readFile(src, "utf-8");
-    await writeFile(dest, content, "utf-8");
-    count++;
-  }
-  return count;
+// --- Helpers ---
+
+function getBaseUrl(): string {
+  return getApiUrl();
 }
 
-async function installForCodex(skills: SkillMeta[]): Promise<number> {
-  let count = 0;
-  for (const skill of skills) {
-    const skillName = skill.fileName.replace(/\.md$/, "");
-    const skillDir = join(CODEX_DIR, skillName);
-    await mkdir(skillDir, { recursive: true });
-
-    const src = join(SKILLS_DIR, skill.fileName);
-    const content = await readFile(src, "utf-8");
-
-    // Codex expects SKILL.md inside a named directory
-    await writeFile(join(skillDir, "SKILL.md"), content, "utf-8");
-    count++;
+async function fetchSkillsManifest(): Promise<SkillsManifest> {
+  const url = `${getBaseUrl()}/skills/skills.json`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch skills list: ${res.status} ${res.statusText}`);
   }
-  return count;
+  return res.json() as Promise<SkillsManifest>;
+}
+
+async function fetchSkillContent(filename: string): Promise<string> {
+  const url = `${getBaseUrl()}/skills/${filename}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to download skill file: ${res.status} ${res.statusText}`);
+  }
+  return res.text();
+}
+
+function computeHash(content: string): string {
+  return createHash("sha256").update(content, "utf-8").digest("hex");
+}
+
+function validateFilename(filename: string): string {
+  const safe = basename(filename);
+  if (!safe.endsWith(".md") || safe !== filename) {
+    throw new Error(`Invalid skill filename: ${filename}`);
+  }
+  return safe;
 }
 
 // --- Commands ---
 
-const installCommand = new Command("install")
-  .description("Install Octopus skills for Claude Code and/or Codex")
-  .option("--claude", "Install only for Claude Code")
-  .option("--codex", "Install only for Codex")
-  .action(async (opts: { claude?: boolean; codex?: boolean }) => {
-    const skills = await getSkills();
-    if (skills.length === 0) {
-      error("No skills found to install.");
-      return;
-    }
-
-    const both = !opts.claude && !opts.codex;
-    let claudeCount = 0;
-    let codexCount = 0;
-
-    if (both || opts.claude) {
-      claudeCount = await installForClaude(skills);
-      success(`Installed ${claudeCount} skill(s) to ${chalk.dim(CLAUDE_DIR)}`);
-    }
-
-    if (both || opts.codex) {
-      codexCount = await installForCodex(skills);
-      success(`Installed ${codexCount} skill(s) to ${chalk.dim(CODEX_DIR)}`);
-    }
-
-    console.log();
-    for (const skill of skills) {
-      info(`${chalk.bold(skill.name)} — ${skill.description || chalk.dim("no description")}`);
-    }
-  });
-
 const listCommand = new Command("list")
   .description("List available Octopus skills and their install status")
   .action(async () => {
-    const skills = await getSkills();
-    if (skills.length === 0) {
+    let manifest: SkillsManifest;
+    try {
+      manifest = await withSpinner("Fetching skills…", () => fetchSkillsManifest());
+    } catch (err: any) {
+      error(err.message);
+      return;
+    }
+
+    const state = await loadState();
+
+    // New skills notification
+    if (manifest.version > state.lastKnownVersion && state.lastKnownVersion > 0) {
+      console.log(chalk.cyan("🆕 New skills available!\n"));
+    }
+
+    // Update state
+    state.lastKnownVersion = manifest.version;
+    state.lastCheckedAt = new Date().toISOString();
+    await saveState(state);
+
+    if (manifest.skills.length === 0) {
       info("No skills available.");
       return;
     }
 
     const rows: string[][] = [];
-    for (const skill of skills) {
-      const claudeInstalled = await exists(join(CLAUDE_DIR, skill.fileName));
-      const codexInstalled = await exists(join(CODEX_DIR, skill.fileName.replace(/\.md$/, ""), "SKILL.md"));
+    for (const skill of manifest.skills) {
+      const installedEntry = state.installed[skill.name];
+      let status: string;
+
+      if (installedEntry) {
+        if (installedEntry.hash !== skill.hash) {
+          status = chalk.green("✓ installed") + " " + chalk.yellow("(update available)");
+        } else {
+          status = chalk.green("✓ installed");
+        }
+      } else {
+        status = chalk.dim("not installed");
+      }
 
       rows.push([
         chalk.bold(skill.name),
         skill.description || chalk.dim("—"),
-        claudeInstalled ? chalk.green("yes") : chalk.dim("no"),
-        codexInstalled ? chalk.green("yes") : chalk.dim("no"),
+        status,
       ]);
     }
 
-    table(rows, ["Skill", "Description", "Claude", "Codex"]);
+    table(rows, ["Name", "Description", "Status"]);
   });
+
+const installCommand = new Command("install")
+  .description("Install a skill from Octopus skill registry")
+  .argument("[name]", "Skill name to install")
+  .option("--all", "Install all available skills")
+  .action(async (name: string | undefined, opts: { all?: boolean }) => {
+    if (!name && !opts.all) {
+      error("Provide a skill name or use --all to install all skills.");
+      return;
+    }
+
+    let manifest: SkillsManifest;
+    try {
+      manifest = await withSpinner("Fetching skills…", () => fetchSkillsManifest());
+    } catch (err: any) {
+      error(err.message);
+      return;
+    }
+
+    const toInstall = opts.all
+      ? manifest.skills
+      : manifest.skills.filter((s) => s.name === name);
+
+    if (toInstall.length === 0) {
+      error(`Skill "${name}" not found. Run ${chalk.cyan("octopus skills list")} to see available skills.`);
+      return;
+    }
+
+    await mkdir(COMMANDS_DIR, { recursive: true });
+    const state = await loadState();
+
+    for (const skill of toInstall) {
+      const installedEntry = state.installed[skill.name];
+
+      // Already up to date
+      if (installedEntry && installedEntry.hash === skill.hash) {
+        info(`${chalk.bold(skill.name)} is already up to date.`);
+        continue;
+      }
+
+      try {
+        const safeFilename = validateFilename(skill.filename);
+        const content = await withSpinner(
+          `Downloading ${skill.name}…`,
+          () => fetchSkillContent(safeFilename),
+        );
+
+        // Verify hash — abort on mismatch
+        const downloadedHash = computeHash(content);
+        if (downloadedHash !== skill.hash) {
+          error(
+            `Hash mismatch for ${chalk.bold(skill.name)}: expected ${skill.hash.slice(0, 12)}… got ${downloadedHash.slice(0, 12)}…. Aborting.`,
+          );
+          continue;
+        }
+
+        const dest = join(COMMANDS_DIR, safeFilename);
+        await writeFile(dest, content, "utf-8");
+
+        // Update state
+        state.installed[skill.name] = {
+          hash: skill.hash,
+          installedAt: new Date().toISOString(),
+        };
+
+        if (installedEntry) {
+          success(`Updated ${chalk.bold(skill.name)}.`);
+        } else {
+          success(
+            `Installed ${chalk.bold(skill.name)}. Use it with: ${chalk.cyan(`/${skill.name}`)}`,
+          );
+        }
+      } catch (err: any) {
+        error(`Failed to install ${skill.name}: ${err.message}`);
+      }
+    }
+
+    state.lastKnownVersion = manifest.version;
+    state.lastCheckedAt = new Date().toISOString();
+    await saveState(state);
+  });
+
+const updateCommand = new Command("update")
+  .description("Update all installed skills to their latest versions")
+  .action(async () => {
+    let manifest: SkillsManifest;
+    try {
+      manifest = await withSpinner("Fetching skills…", () => fetchSkillsManifest());
+    } catch (err: any) {
+      error(err.message);
+      return;
+    }
+
+    const state = await loadState();
+    const installedNames = Object.keys(state.installed);
+
+    if (installedNames.length === 0) {
+      info("No skills installed. Run " + chalk.cyan("octopus skills install <name>") + " first.");
+      return;
+    }
+
+    let updated = 0;
+    let upToDate = 0;
+
+    for (const name of installedNames) {
+      const skill = manifest.skills.find((s) => s.name === name);
+      if (!skill) {
+        warn(`Skill "${name}" no longer exists in registry, skipping.`);
+        continue;
+      }
+
+      if (state.installed[name].hash === skill.hash) {
+        upToDate++;
+        continue;
+      }
+
+      try {
+        const safeFilename = validateFilename(skill.filename);
+        const content = await withSpinner(
+          `Updating ${skill.name}…`,
+          () => fetchSkillContent(safeFilename),
+        );
+
+        const downloadedHash = computeHash(content);
+        if (downloadedHash !== skill.hash) {
+          error(
+            `Hash mismatch for ${chalk.bold(skill.name)}: expected ${skill.hash.slice(0, 12)}… got ${downloadedHash.slice(0, 12)}…. Aborting.`,
+          );
+          continue;
+        }
+
+        await mkdir(COMMANDS_DIR, { recursive: true });
+        await writeFile(join(COMMANDS_DIR, safeFilename), content, "utf-8");
+
+        state.installed[name] = {
+          hash: skill.hash,
+          installedAt: new Date().toISOString(),
+        };
+        updated++;
+      } catch (err: any) {
+        error(`Failed to update ${name}: ${err.message}`);
+      }
+    }
+
+    state.lastKnownVersion = manifest.version;
+    state.lastCheckedAt = new Date().toISOString();
+    await saveState(state);
+
+    const parts: string[] = [];
+    if (updated > 0) parts.push(`Updated ${updated} skill(s)`);
+    if (upToDate > 0) parts.push(`${upToDate} already up to date`);
+    success(parts.join(", ") || "Nothing to update.");
+  });
+
+const removeCommand = new Command("remove")
+  .description("Remove an installed skill")
+  .argument("<name>", "Skill name to remove")
+  .action(async (name: string) => {
+    const state = await loadState();
+
+    if (!state.installed[name]) {
+      error(`Skill "${name}" is not installed.`);
+      return;
+    }
+
+    // Try to find filename from manifest, fallback to name-based convention
+    let filename = `${name}.md`;
+    try {
+      const manifest = await fetchSkillsManifest();
+      const skill = manifest.skills.find((s) => s.name === name);
+      if (skill) filename = skill.filename;
+    } catch {
+      // Use fallback filename
+    }
+
+    const safeFilename = basename(filename);
+    const dest = join(COMMANDS_DIR, safeFilename);
+    try {
+      await unlink(dest);
+    } catch (err: any) {
+      if (err.code !== "ENOENT") {
+        error(`Failed to remove file: ${err.message}`);
+        return;
+      }
+    }
+
+    delete state.installed[name];
+    await saveState(state);
+    success(`Removed ${chalk.bold(name)}.`);
+  });
+
+// --- Startup check (exported for use in index.ts) ---
+
+export async function checkSkillUpdates(): Promise<void> {
+  try {
+    const state = await loadState();
+
+    // Throttle: max once per day
+    if (state.lastCheckedAt) {
+      const lastCheck = new Date(state.lastCheckedAt).getTime();
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      if (Date.now() - lastCheck < oneDayMs) return;
+    }
+
+    const url = `${getBaseUrl()}/skills/skills.json`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+
+    const manifest = (await res.json()) as SkillsManifest;
+
+    // Update check timestamp
+    state.lastCheckedAt = new Date().toISOString();
+
+    // New version available
+    if (manifest.version > state.lastKnownVersion && state.lastKnownVersion > 0) {
+      console.log(
+        chalk.cyan("🆕 New skills available!") +
+          " Run " +
+          chalk.cyan("`octopus skills list`") +
+          " to see them.",
+      );
+    }
+
+    // Check for hash changes in installed skills
+    const installedNames = Object.keys(state.installed);
+    if (installedNames.length > 0) {
+      const hasUpdates = installedNames.some((name) => {
+        const remote = manifest.skills.find((s) => s.name === name);
+        return remote && state.installed[name].hash !== remote.hash;
+      });
+
+      if (hasUpdates) {
+        console.log(
+          chalk.yellow("📦 Skill updates available.") +
+            " Run " +
+            chalk.cyan("`octopus skills update`"),
+        );
+      }
+    }
+
+    state.lastKnownVersion = manifest.version;
+    await saveState(state);
+  } catch {
+    // Silently ignore — startup check must never block or crash
+  }
+}
+
+// --- Export command ---
 
 export const skillsCommand = new Command("skills")
   .description("Manage Octopus skills for AI coding agents")
+  .addCommand(listCommand)
   .addCommand(installCommand)
-  .addCommand(listCommand);
+  .addCommand(updateCommand)
+  .addCommand(removeCommand);
