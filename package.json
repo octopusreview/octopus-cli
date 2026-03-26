@@ -1,6 +1,6 @@
 {
   "name": "@octp/cli",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "CLI tool for Octopus — AI-powered PR review and codebase intelligence",
   "type": "module",
   "main": "./dist/index.js",
