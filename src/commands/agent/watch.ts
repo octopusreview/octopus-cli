@@ -1,10 +1,13 @@
 import { Command } from "commander";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { execSync } from "node:child_process";
-import { resolve, join } from "node:path";
+import { execSync, spawn } from "node:child_process";
+import { resolve, join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import chalk from "chalk";
 import { success, error, warn, info, heading, table } from "../../lib/output.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const CONFIG_DIR = join(homedir(), ".octopus");
 const WATCH_FILE = join(CONFIG_DIR, "agent-watch.json");
@@ -67,7 +70,9 @@ export const watchCommand = new Command("watch")
   .argument("[path]", "Directory to watch (defaults to current directory)")
   .option("--list", "List all watched directories")
   .option("--remove", "Remove directory from watch list")
-  .action(async (pathArg: string | undefined, opts: { list?: boolean; remove?: boolean }) => {
+  .option("--no-start", "Don't auto-start the agent after adding")
+  .option("--verbose", "Start agent in foreground with detailed logs")
+  .action(async (pathArg: string | undefined, opts: { list?: boolean; remove?: boolean; start?: boolean; verbose?: boolean }) => {
     if (opts.list) {
       const config = loadWatchConfig();
       if (config.entries.length === 0) {
@@ -143,4 +148,17 @@ export const watchCommand = new Command("watch")
     });
     saveWatchConfig(config);
     success(`Added ${targetPath} → ${chalk.cyan(repoFullName)} (via git remote)`);
+
+    if (opts.start !== false) {
+      info("Starting agent...\n");
+      const binPath = join(__dirname, "..", "..", "..", "bin", "octopus.js");
+      const args = [binPath, "agent", "start"];
+      if (opts.verbose) args.push("--verbose");
+
+      const child = spawn(process.execPath, args, {
+        stdio: "inherit",
+      });
+      child.on("close", (code) => process.exit(code ?? 0));
+      await new Promise(() => {});
+    }
   });
