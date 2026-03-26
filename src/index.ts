@@ -11,7 +11,7 @@ import { repoCommand } from "./commands/repo/index.js";
 import { prCommand } from "./commands/pr/index.js";
 import { knowledgeCommand } from "./commands/knowledge/index.js";
 import { analyzeDepsCommand } from "./commands/analyze-deps.js";
-import { skillsCommand } from "./commands/skills.js";
+import { skillsCommand, checkSkillUpdates } from "./commands/skills.js";
 import { agentCommand } from "./commands/agent/index.js";
 
 let version = "0.0.0";
@@ -41,5 +41,8 @@ program.addCommand(knowledgeCommand);
 program.addCommand(analyzeDepsCommand);
 program.addCommand(skillsCommand);
 program.addCommand(agentCommand);
+
+// Non-blocking startup check for skill updates
+checkSkillUpdates();
 
 program.parse();
