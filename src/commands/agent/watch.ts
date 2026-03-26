@@ -158,7 +158,11 @@ export const watchCommand = new Command("watch")
       const child = spawn(process.execPath, args, {
         stdio: "inherit",
       });
-      child.on("close", (code) => process.exit(code ?? 0));
-      await new Promise(() => {});
+      await new Promise<void>((resolve) => {
+        child.on("close", (code) => {
+          process.exit(code ?? 0);
+          resolve();
+        });
+      });
     }
   });

@@ -1,6 +1,6 @@
 import { Command } from "commander";
-import { hostname } from "node:os";
-import { existsSync } from "node:fs";
+import { hostname, homedir } from "node:os";
+import { existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { execSync, spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -97,6 +97,11 @@ export const startCommand = new Command("start")
     // Default: background mode — spawn detached child and exit
     if (!runInForeground) {
       const binPath = join(__dirname, "..", "..", "..", "bin", "octopus.js");
+      if (!existsSync(binPath)) {
+        error(`Could not locate agent binary at: ${binPath}`);
+        process.exit(1);
+      }
+
       const args = [binPath, "agent", "start", "--foreground"];
       if (opts.withClaude) args.push("--with-claude");
 
@@ -104,10 +109,22 @@ export const startCommand = new Command("start")
         detached: true,
         stdio: "ignore",
       });
+
+      child.on("error", (err) => {
+        error(`Failed to start background agent: ${err.message}`);
+        process.exit(1);
+      });
+
       child.unref();
 
+      // Write PID file for manageability
+      const pidDir = join(homedir(), ".octopus");
+      mkdirSync(pidDir, { recursive: true });
+      const pidFile = join(pidDir, "agent.pid");
+      writeFileSync(pidFile, String(child.pid));
+
       success(`Agent started in background (PID: ${child.pid})`);
-      info("Use 'octopus agent status' or 'kill' to manage the process.");
+      info(`PID saved to ${pidFile}. To stop: kill $(cat ${pidFile})`);
       process.exit(0);
     }
 
