@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { mkdir, writeFile, readFile, unlink } from "node:fs/promises";
-import { join } from "node:path";
+import { join, basename } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import chalk from "chalk";
@@ -80,6 +80,14 @@ async function fetchSkillContent(filename: string): Promise<string> {
 
 function computeHash(content: string): string {
   return createHash("sha256").update(content, "utf-8").digest("hex");
+}
+
+function validateFilename(filename: string): string {
+  const safe = basename(filename);
+  if (!safe.endsWith(".md") || safe !== filename) {
+    throw new Error(`Invalid skill filename: ${filename}`);
+  }
+  return safe;
 }
 
 // --- Commands ---
@@ -177,20 +185,22 @@ const installCommand = new Command("install")
       }
 
       try {
+        const safeFilename = validateFilename(skill.filename);
         const content = await withSpinner(
           `Downloading ${skill.name}…`,
-          () => fetchSkillContent(skill.filename),
+          () => fetchSkillContent(safeFilename),
         );
 
-        // Verify hash
+        // Verify hash — abort on mismatch
         const downloadedHash = computeHash(content);
         if (downloadedHash !== skill.hash) {
-          warn(
-            `Hash mismatch for ${chalk.bold(skill.name)}: expected ${skill.hash.slice(0, 12)}… got ${downloadedHash.slice(0, 12)}…`,
+          error(
+            `Hash mismatch for ${chalk.bold(skill.name)}: expected ${skill.hash.slice(0, 12)}… got ${downloadedHash.slice(0, 12)}…. Aborting.`,
           );
+          continue;
         }
 
-        const dest = join(COMMANDS_DIR, skill.filename);
+        const dest = join(COMMANDS_DIR, safeFilename);
         await writeFile(dest, content, "utf-8");
 
         // Update state
@@ -251,20 +261,22 @@ const updateCommand = new Command("update")
       }
 
       try {
+        const safeFilename = validateFilename(skill.filename);
         const content = await withSpinner(
           `Updating ${skill.name}…`,
-          () => fetchSkillContent(skill.filename),
+          () => fetchSkillContent(safeFilename),
         );
 
         const downloadedHash = computeHash(content);
         if (downloadedHash !== skill.hash) {
-          warn(
-            `Hash mismatch for ${chalk.bold(skill.name)}: expected ${skill.hash.slice(0, 12)}… got ${downloadedHash.slice(0, 12)}…`,
+          error(
+            `Hash mismatch for ${chalk.bold(skill.name)}: expected ${skill.hash.slice(0, 12)}… got ${downloadedHash.slice(0, 12)}…. Aborting.`,
           );
+          continue;
         }
 
         await mkdir(COMMANDS_DIR, { recursive: true });
-        await writeFile(join(COMMANDS_DIR, skill.filename), content, "utf-8");
+        await writeFile(join(COMMANDS_DIR, safeFilename), content, "utf-8");
 
         state.installed[name] = {
           hash: skill.hash,
@@ -307,7 +319,8 @@ const removeCommand = new Command("remove")
       // Use fallback filename
     }
 
-    const dest = join(COMMANDS_DIR, filename);
+    const safeFilename = basename(filename);
+    const dest = join(COMMANDS_DIR, safeFilename);
     try {
       await unlink(dest);
     } catch (err: any) {
