@@ -1,0 +1,89 @@
+name: Release Binaries
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: bun-linux-x64
+            artifact: octopus-linux-x64
+          - os: ubuntu-latest
+            target: bun-linux-arm64
+            artifact: octopus-linux-arm64
+          - os: macos-latest
+            target: bun-darwin-x64
+            artifact: octopus-darwin-x64
+          - os: macos-latest
+            target: bun-darwin-arm64
+            artifact: octopus-darwin-arm64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build binary
+        run: |
+          bun build ./src/index.ts \
+            --compile \
+            --target=${{ matrix.target }} \
+            --outfile=octopus
+
+      - name: Compress binary (tar.gz)
+        run: |
+          tar -czf ${{ matrix.artifact }}.tar.gz octopus
+
+      - name: Generate checksum
+        run: |
+          shasum -a 256 ${{ matrix.artifact }}.tar.gz > ${{ matrix.artifact }}.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}.tar.gz
+            ${{ matrix.artifact }}.sha256
+
+  upload:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Merge checksums
+        run: |
+          cat artifacts/*/*.sha256 | sort > checksums.txt
+
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          for dir in artifacts/*/; do
+            for file in "$dir"*.tar.gz; do
+              [ -f "$file" ] && gh release upload "${{ github.event.release.tag_name }}" "$file" --clobber
+            done
+          done
+          gh release upload "${{ github.event.release.tag_name }}" checksums.txt --clobber
