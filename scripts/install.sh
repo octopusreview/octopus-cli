@@ -47,10 +47,17 @@ get_latest_version() {
   need_cmd curl
 
   local url="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
-  VERSION=$(curl -fsSL "$url" | grep '"tag_name"' | sed -E 's/.*"tag_name":\s*"([^"]+)".*/\1/')
+  local response
+  response=$(curl -fsSL "$url") || error "Failed to fetch release info from GitHub. You may be rate-limited."
+
+  if command -v jq > /dev/null 2>&1; then
+    VERSION=$(echo "$response" | jq -r '.tag_name // empty')
+  else
+    VERSION=$(echo "$response" | grep '"tag_name"' | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/')
+  fi
 
   if [ -z "$VERSION" ]; then
-    error "Could not determine the latest release version."
+    error "Could not determine the latest release version. You may be rate-limited by GitHub API."
   fi
 
   info "Latest version: ${VERSION}"
@@ -75,6 +82,25 @@ download_and_install() {
   local tmpfile="${tmpdir}/${artifact}"
   curl -fsSL -o "$tmpfile" "$download_url" || error "Download failed. Check if a release exists for your platform: ${PLATFORM}-${ARCH}"
 
+  # Verify SHA256 checksum if checksums.txt is available
+  local checksums_url="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/checksums.txt"
+  local expected_sha
+  expected_sha=$(curl -fsSL "$checksums_url" 2>/dev/null | grep "${artifact}" | awk '{print $1}') || true
+  if [ -n "$expected_sha" ]; then
+    local actual_sha
+    if command -v sha256sum > /dev/null 2>&1; then
+      actual_sha=$(sha256sum "$tmpfile" | awk '{print $1}')
+    elif command -v shasum > /dev/null 2>&1; then
+      actual_sha=$(shasum -a 256 "$tmpfile" | awk '{print $1}')
+    fi
+    if [ -n "$actual_sha" ] && [ "$expected_sha" != "$actual_sha" ]; then
+      error "Checksum mismatch! Expected ${expected_sha}, got ${actual_sha}. Aborting."
+    fi
+    info "Checksum verified."
+  else
+    warn "No checksums.txt found for this release — skipping integrity check."
+  fi
+
   chmod +x "$tmpfile"
 
   # Try preferred install dir, fall back to user-local dir
@@ -86,6 +112,7 @@ download_and_install() {
     ensure_in_path "$target_dir"
   fi
 
+  INSTALLED_DIR="$target_dir"
   success "Installed ${BINARY_NAME} to ${target_dir}/${BINARY_NAME}${ext}"
 }
 
@@ -130,8 +157,7 @@ prompt_install_skills() {
   case "$answer" in
     [yY]|[yY][eE][sS])
       info "Installing skills..."
-      "${INSTALL_DIR}/${BINARY_NAME}" skills install --all 2>/dev/null \
-        || "${FALLBACK_DIR}/${BINARY_NAME}" skills install --all 2>/dev/null \
+      "${INSTALLED_DIR}/${BINARY_NAME}" skills install --all \
         || warn "Could not install skills automatically. Run 'octopus skills install --all' after logging in."
       ;;
     *)

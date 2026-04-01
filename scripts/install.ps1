@@ -1,4 +1,5 @@
-# Octopus CLI installer for Windows
+#Requires -Version 6.0
+# Octopus CLI installer for Windows (requires PowerShell 6+ / PowerShell Core)
 # Usage: irm https://octopus-review.ai/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 
@@ -42,7 +43,7 @@ function Get-LatestVersion {
 # ─── Download & Install ────────────────────────────────────────────────────
 
 function Install-Octopus {
-    $arch = Get-Arch
+    param($arch)
     $version = Get-LatestVersion
 
     $artifact = "$BINARY_NAME-windows-$arch.exe"
@@ -61,6 +62,24 @@ function Install-Octopus {
         Invoke-WebRequest -Uri $downloadUrl -OutFile $destination -UseBasicParsing
     } catch {
         Write-Err "Download failed. Check if a release exists for windows-$arch. Error: $_"
+    }
+
+    # Verify SHA256 checksum if checksums.txt is available
+    $checksumsUrl = "https://github.com/$GITHUB_REPO/releases/download/$version/checksums.txt"
+    try {
+        $checksums = Invoke-RestMethod -Uri $checksumsUrl -Headers @{ "User-Agent" = "octopus-installer" }
+        $expectedLine = $checksums -split "`n" | Where-Object { $_ -match $artifact }
+        if ($expectedLine) {
+            $expectedSha = ($expectedLine -split "\s+")[0]
+            $actualSha = (Get-FileHash -Path $destination -Algorithm SHA256).Hash.ToLower()
+            if ($expectedSha -ne $actualSha) {
+                Remove-Item $destination -Force
+                Write-Err "Checksum mismatch! Expected $expectedSha, got $actualSha. Aborting."
+            }
+            Write-Info "Checksum verified."
+        }
+    } catch {
+        Write-Warn "No checksums.txt found for this release — skipping integrity check."
     }
 
     Write-Success "Installed $BINARY_NAME to $destination"
@@ -101,7 +120,7 @@ Write-Host ""
 $arch = Get-Arch
 Write-Info "Detected platform: windows-$arch"
 
-Install-Octopus
+Install-Octopus -arch $arch
 Prompt-InstallSkills
 
 Write-Host ""
