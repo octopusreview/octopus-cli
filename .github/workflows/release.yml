@@ -28,6 +28,9 @@ jobs:
           - os: windows-latest
             target: bun-windows-x64
             artifact: octopus-windows-x64
+          - os: windows-latest
+            target: bun-windows-arm64
+            artifact: octopus-windows-arm64
 
     runs-on: ${{ matrix.os }}
 
