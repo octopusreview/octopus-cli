@@ -151,8 +151,8 @@ ensure_in_path() {
 # ─── Skills prompt ──────────────────────────────────────────────────────────
 
 prompt_install_skills() {
-  # If running non-interactively (piped), skip prompt
-  if [ ! -t 0 ]; then
+  # If no terminal available at all, skip prompt
+  if [ ! -e /dev/tty ]; then
     info ""
     info "To install skills later, run: octopus skills install --all"
     return
@@ -160,7 +160,7 @@ prompt_install_skills() {
 
   echo ""
   printf 'Would you like to install Octopus skills for Claude Code? (y/N) '
-  read -r answer
+  read -r answer < /dev/tty
   case "$answer" in
     [yY]|[yY][eE][sS])
       info "Installing skills..."
