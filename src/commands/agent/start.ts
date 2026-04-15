@@ -82,10 +82,15 @@ function resolveWatchedRepos(): Map<string, string> {
 
 export const startCommand = new Command("start")
   .description("Start the local agent daemon")
-  .option("--with-claude", "Enable Claude CLI for deep semantic search")
+  .option("--no-claude", "Disable Claude CLI (use ripgrep only)")
+  .option("--with-claude", "[deprecated] Claude is now enabled by default. Use --no-claude to disable it.")
   .option("--verbose", "Run in foreground with detailed logs")
   .option("--foreground", "Run in foreground (without verbose logs)")
-  .action(async (opts: { withClaude?: boolean; verbose?: boolean; foreground?: boolean }) => {
+  .action(async (opts: { claude?: boolean; withClaude?: boolean; verbose?: boolean; foreground?: boolean }) => {
+    if (opts.withClaude) {
+      warn("--with-claude is deprecated and has no effect. Claude is now enabled by default. Use --no-claude to disable it.");
+    }
+
     const token = getApiToken();
     if (!token) {
       error("Not logged in. Run 'octopus login' first.");
@@ -124,7 +129,7 @@ export const startCommand = new Command("start")
         }
       }
 
-      if (opts.withClaude) args.push("--with-claude");
+      if (opts.claude === false) args.push("--no-claude");
 
       const child = spawn(execPath, args, {
         detached: true,
@@ -162,9 +167,9 @@ export const startCommand = new Command("start")
       console.log(`  ${chalk.cyan(name)} → ${path}`);
     }
 
-    // Check Claude CLI availability
-    const claudeAvailable = opts.withClaude ? hasClaudeCli() : false;
-    if (opts.withClaude && !claudeAvailable) {
+    // Check Claude CLI availability (enabled by default, disable with --no-claude)
+    const claudeAvailable = opts.claude !== false ? hasClaudeCli() : false;
+    if (opts.claude !== false && !claudeAvailable) {
       warn("Claude CLI not found. Falling back to ripgrep mode.");
     }
 
@@ -214,9 +219,10 @@ export const startCommand = new Command("start")
         if (verbose) {
           info(`Heartbeat sent (${freshNames.length} repos)`);
         }
-      } catch (err) {
+      } catch (err: unknown) {
         if (verbose) {
-          warn(`Heartbeat failed: ${err instanceof Error ? err.message : err}`);
+          const e = err as { status?: number; url?: string; message?: string };
+          warn(`Heartbeat failed: ${e.message}${e.status ? ` [${e.status}]` : ""}${e.url ? ` → ${e.url}` : ""}`);
         }
       }
     }, 30_000);
@@ -233,9 +239,10 @@ export const startCommand = new Command("start")
         for (const task of res.tasks) {
           handleTask(task, repoMap, agentId, claudeAvailable, verbose);
         }
-      } catch (err) {
+      } catch (err: unknown) {
         if (verbose) {
-          warn(`Poll failed: ${err instanceof Error ? err.message : err}`);
+          const e = err as { status?: number; url?: string; message?: string };
+          warn(`Poll failed: ${e.message}${e.status ? ` [${e.status}]` : ""}${e.url ? ` → ${e.url}` : ""}`);
         }
       }
     }, 2_000);
