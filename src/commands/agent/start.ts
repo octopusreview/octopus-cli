@@ -312,7 +312,7 @@ async function handleTask(
 
       case "answer": {
         if (claudeAvailable) {
-          resultSummary = await claudeAnswer(task, repoDir, task.timeoutMs - 5000);
+          resultSummary = await claudeAnswer(task, repoDir, Math.max(task.timeoutMs - 5000, 10_000));
         } else {
           throw new Error("Answer task requires Claude CLI");
         }
