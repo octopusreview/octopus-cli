@@ -153,15 +153,30 @@ export const watchCommand = new Command("watch")
       info("Starting agent...\n");
       // Detect if running as a compiled binary (Bun single-file executable)
       const isCompiledBinary = !process.execPath.includes("node") && !process.execPath.includes("bun") && existsSync(process.execPath);
-      const binPath = isCompiledBinary
-        ? process.execPath
-        : join(__dirname, "..", "..", "..", "bin", "octopus.js");
-      const args = isCompiledBinary
-        ? ["agent", "start"]
-        : [binPath, "agent", "start"];
+
+      let execPath: string;
+      let args: string[];
+
+      if (isCompiledBinary) {
+        execPath = process.execPath;
+        args = ["agent", "start"];
+      } else {
+        const entryScript = process.argv[1];
+        if (!entryScript || !existsSync(entryScript)) {
+          const binPath = join(__dirname, "..", "..", "..", "bin", "octopus.js");
+          if (!existsSync(binPath)) {
+            error(`Could not locate agent binary at: ${binPath}`);
+            process.exit(1);
+          }
+          execPath = process.execPath;
+          args = [binPath, "agent", "start"];
+        } else {
+          execPath = process.execPath;
+          args = [entryScript, "agent", "start"];
+        }
+      }
       if (opts.verbose) args.push("--verbose");
 
-      const execPath = isCompiledBinary ? binPath : process.execPath;
       const child = spawn(execPath, args, {
         stdio: "inherit",
       });
