@@ -7,15 +7,56 @@ import { error, info } from "../../lib/output.js";
 import { withSpinner } from "../../lib/spinner.js";
 import chalk from "chalk";
 
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stdin) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf-8").trim();
+}
+
 export const repoChatCommand = new Command("chat")
   .argument("[repo]", "Repository name or full name (auto-detects from git remote)")
+  .option("-p, --print <message>", "Pipeline mode: ask a single question and print the answer (no interactive UI)")
   .description("Start an interactive chat about a repository")
-  .action(async (repoArg?: string) => {
+  .action(async (repoArg: string | undefined, opts: { print?: string }) => {
     try {
-      const repo = await withSpinner("Resolving repository...", async () => {
-        return resolveRepo(repoArg);
-      });
+      const isPipeline = opts.print !== undefined || !stdin.isTTY;
 
+      const repo = isPipeline
+        ? await resolveRepo(repoArg)
+        : await withSpinner("Resolving repository...", async () => {
+            return resolveRepo(repoArg);
+          });
+
+      // Pipeline mode: single question → answer → exit
+      if (isPipeline) {
+        const message = opts.print || await readStdin();
+        if (!message) {
+          process.stderr.write("Error: no message provided. Use -p <message> or pipe via stdin.\n");
+          process.exit(1);
+        }
+
+        let hasError = false;
+        await apiStream(
+          "/api/cli/chat",
+          { message, conversationId: null, repoId: repo.id },
+          (data) => {
+            if (data.type === "delta") {
+              process.stdout.write(data.text as string);
+            } else if (data.type === "error") {
+              process.stderr.write(`Error: ${data.message}\n`);
+              hasError = true;
+            }
+          },
+        );
+
+        process.stdout.write("\n");
+        if (hasError) process.exit(1);
+        return;
+      }
+
+      // Interactive mode
       info(`Chatting about ${chalk.bold(repo.fullName)}. Type 'exit' or Ctrl+C to quit.\n`);
 
       const rl = createInterface({ input: stdin, output: stdout });
