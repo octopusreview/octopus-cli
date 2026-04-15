@@ -63,7 +63,7 @@ function extractKeywords(query: string): string[] {
  */
 function ripgrep(pattern: string, dir: string, maxResults = 20): SearchResult[] {
   try {
-    const rgCmd = `rg --no-heading --line-number --max-count 5 --max-columns 200 --type-add 'code:*.{ts,tsx,js,jsx,py,go,rs,java,rb,php,c,cpp,h,cs,swift,kt,scala,vue,svelte}' --type code --glob '!node_modules' --glob '!dist' --glob '!.git' --glob '!*.lock' --glob '!*.min.*' -- ${JSON.stringify(pattern)} ${JSON.stringify(dir)}`;
+    const rgCmd = `rg --no-heading --line-number --max-count 5 --max-columns 200 --type-add 'searchable:*.{ts,tsx,js,jsx,py,go,rs,java,rb,php,c,cpp,h,cs,swift,kt,scala,vue,svelte,md,json,yaml,yml,toml,xml,html,css,scss,txt}' --type searchable --glob '!node_modules' --glob '!dist' --glob '!.git' --glob '!*.lock' --glob '!*.min.*' -- ${JSON.stringify(pattern)} ${JSON.stringify(dir)}`;
     const output = execSync(rgCmd, {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
@@ -94,11 +94,13 @@ function ripgrep(pattern: string, dir: string, maxResults = 20): SearchResult[] 
   }
 }
 
-const CODE_EXTENSIONS = new Set([
+const SEARCHABLE_EXTENSIONS = new Set([
   ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
   ".py", ".go", ".rs", ".java", ".rb", ".php",
   ".c", ".cpp", ".h", ".cs", ".swift", ".kt",
   ".scala", ".vue", ".svelte",
+  ".md", ".json", ".yaml", ".yml", ".toml",
+  ".xml", ".html", ".css", ".scss", ".txt",
 ]);
 
 const SKIP_DIRS = new Set([
@@ -138,7 +140,7 @@ function nodeSearch(pattern: string, dir: string, maxResults = 20): SearchResult
 
       if (stat.isDirectory()) {
         walk(fullPath);
-      } else if (stat.isFile() && CODE_EXTENSIONS.has(extname(entry))) {
+      } else if (stat.isFile() && SEARCHABLE_EXTENSIONS.has(extname(entry))) {
         // Skip large files (>200KB)
         if (stat.size > 200_000) continue;
 
