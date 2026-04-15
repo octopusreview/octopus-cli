@@ -83,9 +83,14 @@ function resolveWatchedRepos(): Map<string, string> {
 export const startCommand = new Command("start")
   .description("Start the local agent daemon")
   .option("--no-claude", "Disable Claude CLI (use ripgrep only)")
+  .option("--with-claude", "[deprecated] Claude is now enabled by default. Use --no-claude to disable it.")
   .option("--verbose", "Run in foreground with detailed logs")
   .option("--foreground", "Run in foreground (without verbose logs)")
-  .action(async (opts: { claude?: boolean; verbose?: boolean; foreground?: boolean }) => {
+  .action(async (opts: { claude?: boolean; withClaude?: boolean; verbose?: boolean; foreground?: boolean }) => {
+    if (opts.withClaude) {
+      warn("--with-claude is deprecated and has no effect. Claude is now enabled by default. Use --no-claude to disable it.");
+    }
+
     const token = getApiToken();
     if (!token) {
       error("Not logged in. Run 'octopus login' first.");
