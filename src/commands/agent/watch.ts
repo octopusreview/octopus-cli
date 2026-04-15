@@ -151,11 +151,18 @@ export const watchCommand = new Command("watch")
 
     if (opts.start !== false) {
       info("Starting agent...\n");
-      const binPath = join(__dirname, "..", "..", "..", "bin", "octopus.js");
-      const args = [binPath, "agent", "start"];
+      // Detect if running as a compiled binary (Bun single-file executable)
+      const isCompiledBinary = !process.execPath.includes("node") && !process.execPath.includes("bun") && existsSync(process.execPath);
+      const binPath = isCompiledBinary
+        ? process.execPath
+        : join(__dirname, "..", "..", "..", "bin", "octopus.js");
+      const args = isCompiledBinary
+        ? ["agent", "start"]
+        : [binPath, "agent", "start"];
       if (opts.verbose) args.push("--verbose");
 
-      const child = spawn(process.execPath, args, {
+      const execPath = isCompiledBinary ? binPath : process.execPath;
+      const child = spawn(execPath, args, {
         stdio: "inherit",
       });
       await new Promise<void>((resolve) => {
