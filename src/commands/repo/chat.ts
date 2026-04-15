@@ -37,6 +37,7 @@ export const repoChatCommand = new Command("chat")
           process.exit(1);
         }
 
+        let hasError = false;
         await apiStream(
           "/api/cli/chat",
           { message, conversationId: null, repoId: repo.id },
@@ -45,11 +46,13 @@ export const repoChatCommand = new Command("chat")
               process.stdout.write(data.text as string);
             } else if (data.type === "error") {
               process.stderr.write(`Error: ${data.message}\n`);
+              hasError = true;
             }
           },
         );
 
         process.stdout.write("\n");
+        if (hasError) process.exit(1);
         return;
       }
 
