@@ -10,7 +10,7 @@ import { getApiUrl, getApiToken } from "../../lib/config-store.js";
 import { success, error, warn, info } from "../../lib/output.js";
 import { loadWatchConfig, type WatchEntry } from "./watch.js";
 import { semanticSearch, grepSearch, fileReadSearch } from "./searcher.js";
-import { hasClaudeCli, claudeSearch } from "./claude-searcher.js";
+import { hasClaudeCli, claudeSearch, claudeAnswer } from "./claude-searcher.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -101,16 +101,37 @@ export const startCommand = new Command("start")
 
     // Default: background mode — spawn detached child and exit
     if (!runInForeground) {
-      const binPath = join(__dirname, "..", "..", "..", "bin", "octopus.js");
-      if (!existsSync(binPath)) {
-        error(`Could not locate agent binary at: ${binPath}`);
-        process.exit(1);
+      // Detect if running as a compiled binary (Bun single-file executable)
+      const isCompiledBinary = !process.execPath.includes("node") && !process.execPath.includes("bun") && existsSync(process.execPath);
+
+      let execPath: string;
+      let args: string[];
+
+      if (isCompiledBinary) {
+        execPath = process.execPath;
+        args = ["agent", "start", "--foreground"];
+      } else {
+        // For npm-installed or dev usage, use process.argv[1] (the entry script)
+        // which is more reliable than computing a relative path from __dirname
+        const entryScript = process.argv[1];
+        if (!entryScript || !existsSync(entryScript)) {
+          // Fallback to __dirname-based resolution
+          const binPath = join(__dirname, "..", "..", "..", "bin", "octopus.js");
+          if (!existsSync(binPath)) {
+            error(`Could not locate agent binary at: ${binPath}`);
+            process.exit(1);
+          }
+          execPath = process.execPath;
+          args = [binPath, "agent", "start", "--foreground"];
+        } else {
+          execPath = process.execPath;
+          args = [entryScript, "agent", "start", "--foreground"];
+        }
       }
 
-      const args = [binPath, "agent", "start", "--foreground"];
       if (opts.claude === false) args.push("--no-claude");
 
-      const child = spawn(process.execPath, args, {
+      const child = spawn(execPath, args, {
         detached: true,
         stdio: "ignore",
       });
@@ -317,6 +338,15 @@ async function handleTask(
         break;
       }
 
+      case "answer": {
+        if (claudeAvailable) {
+          resultSummary = await claudeAnswer(task, repoDir, Math.max(task.timeoutMs - 5000, 10_000));
+        } else {
+          throw new Error("Answer task requires Claude CLI");
+        }
+        break;
+      }
+
       case "semantic":
       default: {
         const { summary } = await semanticSearch(task.query, repoDir);
@@ -333,6 +363,9 @@ async function handleTask(
 
     if (verbose) {
       success(`Completed task ${task.id} (${resultSummary.length} chars)`);
+      console.log(chalk.dim("─".repeat(60)));
+      console.log(resultSummary);
+      console.log(chalk.dim("─".repeat(60)));
     } else {
       console.log(
         `${chalk.green("✓")} Searched "${task.query.slice(0, 50)}${task.query.length > 50 ? "..." : ""}" in ${chalk.cyan(task.repoFullName)}`,

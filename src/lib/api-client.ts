@@ -4,6 +4,7 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public url?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -27,7 +28,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
-    throw new ApiError(res.status, body.error ?? res.statusText);
+    throw new ApiError(res.status, body.error ?? res.statusText, url);
   }
 
   return res.json() as Promise<T>;
@@ -43,7 +44,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
-    throw new ApiError(res.status, data.error ?? res.statusText);
+    throw new ApiError(res.status, data.error ?? res.statusText, url);
   }
 
   return res.json() as Promise<T>;
@@ -58,7 +59,7 @@ export async function apiDelete<T>(path: string): Promise<T> {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
-    throw new ApiError(res.status, data.error ?? res.statusText);
+    throw new ApiError(res.status, data.error ?? res.statusText, url);
   }
 
   return res.json() as Promise<T>;
@@ -78,7 +79,7 @@ export async function apiStream(
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
-    throw new ApiError(res.status, data.error ?? res.statusText);
+    throw new ApiError(res.status, data.error ?? res.statusText, url);
   }
 
   const reader = res.body?.getReader();
@@ -124,7 +125,7 @@ export async function apiSSE(
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
-    throw new ApiError(res.status, data.error ?? res.statusText);
+    throw new ApiError(res.status, data.error ?? res.statusText, url);
   }
 
   const reader = res.body?.getReader();
