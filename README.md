@@ -155,6 +155,82 @@ $ octopus repo chat
   octopus> Database migrations are located in...
 ```
 
+#### Pipeline Mode (`-p`)
+
+Use `-p` for non-interactive, single-question mode. Output is clean text with no colors or prompts — ideal for piping to other tools or AI agents.
+
+```bash
+# Ask a single question and get the answer
+octopus repo chat -p "How does authentication work?"
+
+# Pipe to another tool
+octopus repo chat -p "List all API endpoints" | grep POST
+
+# Pipe via stdin
+echo "What database does this project use?" | octopus repo chat
+
+# Chain with AI tools
+octopus repo chat acme/backend -p "Summarize the architecture" | claude -p "Translate this to Turkish"
+```
+
+In pipeline mode:
+- No colors, spinners, or interactive prompts
+- Errors go to stderr, clean output to stdout
+- Non-zero exit code on API errors
+- Auto-activates when stdin is not a TTY (piped input)
+
+### `octopus agent watch [path]`
+
+Register a local repository for the Octopus agent. The agent enables real-time codebase search from the Octopus web chat — queries run locally on your machine using ripgrep and Claude CLI.
+
+```bash
+# Watch the current directory
+octopus agent watch
+
+# Watch a specific directory
+octopus agent watch ~/projects/my-app
+
+# List watched directories
+octopus agent watch --list
+
+# Remove a directory from the watch list
+octopus agent watch --remove ~/projects/old-repo
+```
+
+Options:
+- `--list` — List all watched directories
+- `--remove` — Remove directory from watch list
+- `--no-start` — Don't auto-start the agent after adding
+- `--verbose` — Start agent in foreground with detailed logs
+
+### `octopus agent start`
+
+Start the local agent daemon. By default it runs in the background, listening for search requests from the Octopus platform.
+
+```bash
+# Start in background (default)
+octopus agent start
+
+# Start in foreground with verbose logging
+octopus agent start --verbose
+
+# Disable Claude CLI (ripgrep only)
+octopus agent start --no-claude
+```
+
+Options:
+- `--verbose` — Run in foreground with detailed logs
+- `--foreground` — Run in foreground (without verbose logs)
+- `--no-claude` — Disable Claude CLI, use ripgrep only (Claude is enabled by default)
+
+### `octopus agent stop`
+
+Stop the running agent daemon.
+
+```bash
+octopus agent stop
+```
+
 ### `octopus pr review <pr>`
 
 Trigger an AI review on a pull request. Accepts a PR number or full URL.
