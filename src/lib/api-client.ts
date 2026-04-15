@@ -59,7 +59,7 @@ export async function apiDelete<T>(path: string): Promise<T> {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
-    throw new ApiError(res.status, data.error ?? res.statusText);
+    throw new ApiError(res.status, data.error ?? res.statusText, url);
   }
 
   return res.json() as Promise<T>;
@@ -79,7 +79,7 @@ export async function apiStream(
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
-    throw new ApiError(res.status, data.error ?? res.statusText);
+    throw new ApiError(res.status, data.error ?? res.statusText, url);
   }
 
   const reader = res.body?.getReader();
@@ -125,7 +125,7 @@ export async function apiSSE(
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
-    throw new ApiError(res.status, data.error ?? res.statusText);
+    throw new ApiError(res.status, data.error ?? res.statusText, url);
   }
 
   const reader = res.body?.getReader();
