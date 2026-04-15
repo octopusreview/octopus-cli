@@ -15,7 +15,7 @@ export const stopCommand = new Command("stop")
     }
 
     const pid = parseInt(readFileSync(pidFile, "utf-8").trim(), 10);
-    if (isNaN(pid)) {
+    if (isNaN(pid) || pid <= 0) {
       error("Invalid PID file. Removing it.");
       unlinkSync(pidFile);
       return;
