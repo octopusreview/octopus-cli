@@ -96,16 +96,37 @@ export const startCommand = new Command("start")
 
     // Default: background mode — spawn detached child and exit
     if (!runInForeground) {
-      const binPath = join(__dirname, "..", "..", "..", "bin", "octopus.js");
-      if (!existsSync(binPath)) {
-        error(`Could not locate agent binary at: ${binPath}`);
-        process.exit(1);
+      // Detect if running as a compiled binary (Bun single-file executable)
+      const isCompiledBinary = !process.execPath.includes("node") && !process.execPath.includes("bun") && existsSync(process.execPath);
+
+      let execPath: string;
+      let args: string[];
+
+      if (isCompiledBinary) {
+        execPath = process.execPath;
+        args = ["agent", "start", "--foreground"];
+      } else {
+        // For npm-installed or dev usage, use process.argv[1] (the entry script)
+        // which is more reliable than computing a relative path from __dirname
+        const entryScript = process.argv[1];
+        if (!entryScript || !existsSync(entryScript)) {
+          // Fallback to __dirname-based resolution
+          const binPath = join(__dirname, "..", "..", "..", "bin", "octopus.js");
+          if (!existsSync(binPath)) {
+            error(`Could not locate agent binary at: ${binPath}`);
+            process.exit(1);
+          }
+          execPath = process.execPath;
+          args = [binPath, "agent", "start", "--foreground"];
+        } else {
+          execPath = process.execPath;
+          args = [entryScript, "agent", "start", "--foreground"];
+        }
       }
 
-      const args = [binPath, "agent", "start", "--foreground"];
       if (opts.withClaude) args.push("--with-claude");
 
-      const child = spawn(process.execPath, args, {
+      const child = spawn(execPath, args, {
         detached: true,
         stdio: "ignore",
       });
