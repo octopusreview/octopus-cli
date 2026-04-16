@@ -18,16 +18,27 @@ async function readStdin(): Promise<string> {
 export const repoChatCommand = new Command("chat")
   .argument("[repo]", "Repository name or full name (auto-detects from git remote)")
   .option("-p, --print <message>", "Pipeline mode: ask a single question and print the answer (no interactive UI)")
+  .option("-g, --global", "Global mode: ask questions across all repos in your organization")
   .description("Start an interactive chat about a repository")
-  .action(async (repoArg: string | undefined, opts: { print?: string }) => {
+  .action(async (repoArg: string | undefined, opts: { print?: string; global?: boolean }) => {
     try {
       const isPipeline = opts.print !== undefined || !stdin.isTTY;
+      const isGlobal = opts.global === true;
 
-      const repo = isPipeline
-        ? await resolveRepo(repoArg)
-        : await withSpinner("Resolving repository...", async () => {
-            return resolveRepo(repoArg);
-          });
+      let repoId: string | null = null;
+      let label: string;
+
+      if (isGlobal) {
+        label = "your organization";
+      } else {
+        const repo = isPipeline
+          ? await resolveRepo(repoArg)
+          : await withSpinner("Resolving repository...", async () => {
+              return resolveRepo(repoArg);
+            });
+        repoId = repo.id;
+        label = repo.fullName;
+      }
 
       // Pipeline mode: single question → answer → exit
       if (isPipeline) {
@@ -40,7 +51,7 @@ export const repoChatCommand = new Command("chat")
         let hasError = false;
         await apiStream(
           "/api/cli/chat",
-          { message, conversationId: null, repoId: repo.id },
+          { message, conversationId: null, repoId },
           (data) => {
             if (data.type === "delta") {
               process.stdout.write(data.text as string);
@@ -57,7 +68,7 @@ export const repoChatCommand = new Command("chat")
       }
 
       // Interactive mode
-      info(`Chatting about ${chalk.bold(repo.fullName)}. Type 'exit' or Ctrl+C to quit.\n`);
+      info(`Chatting about ${chalk.bold(label)}. Type 'exit' or Ctrl+C to quit.\n`);
 
       const rl = createInterface({ input: stdin, output: stdout });
       let conversationId: string | null = null;
@@ -87,7 +98,7 @@ export const repoChatCommand = new Command("chat")
             {
               message,
               conversationId,
-              repoId: repo.id,
+              repoId,
             },
             (data) => {
               if (data.type === "conversation_id") {
