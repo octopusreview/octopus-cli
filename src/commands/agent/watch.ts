@@ -36,7 +36,7 @@ function saveWatchConfig(config: WatchConfig): void {
   if (!existsSync(CONFIG_DIR)) {
     mkdirSync(CONFIG_DIR, { recursive: true });
   }
-  writeFileSync(WATCH_FILE, JSON.stringify(config, null, 2));
+  writeFileSync(WATCH_FILE, JSON.stringify(config, null, 2), { mode: 0o600 });
 }
 
 function getGitRemoteUrl(dirPath: string): string | null {

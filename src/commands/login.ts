@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
-import { exec } from "node:child_process";
+import { spawn } from "node:child_process";
 import { setProfile, getApiUrl } from "../lib/config-store.js";
 import { success, error, info } from "../lib/output.js";
 import { withSpinner } from "../lib/spinner.js";
@@ -18,10 +18,10 @@ function openBrowser(url: string): void {
   }
 
   if (process.platform === "win32") {
-    exec(`start "" "${url}"`);
+    spawn("cmd", ["/c", "start", "", url], { stdio: "ignore" }).unref();
   } else {
     const cmd = process.platform === "darwin" ? "open" : "xdg-open";
-    exec(`${cmd} "${url}"`);
+    spawn(cmd, [url], { stdio: "ignore" }).unref();
   }
 }
 

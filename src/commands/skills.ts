@@ -51,7 +51,7 @@ async function loadState(): Promise<SkillsState> {
 
 async function saveState(state: SkillsState): Promise<void> {
   await mkdir(STATE_DIR, { recursive: true });
-  await writeFile(STATE_FILE, JSON.stringify(state, null, 2), "utf-8");
+  await writeFile(STATE_FILE, JSON.stringify(state, null, 2), { mode: 0o600 });
 }
 
 // --- Helpers ---

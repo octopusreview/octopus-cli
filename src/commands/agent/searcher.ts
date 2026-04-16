@@ -1,6 +1,6 @@
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
-import { join, extname, relative } from "node:path";
+import { join, extname, relative, resolve } from "node:path";
 
 interface SearchResult {
   file: string;
@@ -63,8 +63,23 @@ function extractKeywords(query: string): string[] {
  */
 function ripgrep(pattern: string, dir: string, maxResults = 20): SearchResult[] {
   try {
-    const rgCmd = `rg --no-heading --line-number --max-count 5 --max-columns 200 --type-add 'searchable:*.{ts,tsx,js,jsx,py,go,rs,java,rb,php,c,cpp,h,cs,swift,kt,scala,vue,svelte,md,json,yaml,yml,toml,xml,html,css,scss,txt}' --type searchable --glob '!node_modules' --glob '!dist' --glob '!.git' --glob '!*.lock' --glob '!*.min.*' -- ${JSON.stringify(pattern)} ${JSON.stringify(dir)}`;
-    const output = execSync(rgCmd, {
+    const rgArgs = [
+      "--no-heading",
+      "--line-number",
+      "--max-count", "5",
+      "--max-columns", "200",
+      "--type-add", "searchable:*.{ts,tsx,js,jsx,py,go,rs,java,rb,php,c,cpp,h,cs,swift,kt,scala,vue,svelte,md,json,yaml,yml,toml,xml,html,css,scss,txt}",
+      "--type", "searchable",
+      "--glob", "!node_modules",
+      "--glob", "!dist",
+      "--glob", "!.git",
+      "--glob", "!*.lock",
+      "--glob", "!*.min.*",
+      "--",
+      pattern,
+      dir,
+    ];
+    const output = execFileSync("rg", rgArgs, {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
       maxBuffer: 1024 * 1024,
@@ -192,7 +207,9 @@ function hasRipgrep(): boolean {
  * Read a file and return content with line numbers.
  */
 function readFile(filePath: string, repoDir: string): string | null {
-  const fullPath = join(repoDir, filePath);
+  const fullPath = resolve(repoDir, filePath);
+  // Prevent path traversal outside the repo directory
+  if (!fullPath.startsWith(resolve(repoDir) + "/") && fullPath !== resolve(repoDir)) return null;
   if (!existsSync(fullPath)) return null;
   try {
     const content = readFileSync(fullPath, "utf-8");

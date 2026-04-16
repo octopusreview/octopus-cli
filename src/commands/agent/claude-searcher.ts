@@ -1,4 +1,4 @@
-import { execSync, spawnSync } from "node:child_process";
+import { spawnSync, execFileSync } from "node:child_process";
 
 const MAX_SUMMARY_SIZE = 15 * 1024; // 15KB
 
@@ -7,7 +7,7 @@ const MAX_SUMMARY_SIZE = 15 * 1024; // 15KB
  */
 export function hasClaudeCli(): boolean {
   try {
-    execSync("claude --version", {
+    execFileSync("claude", ["--version"], {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
       timeout: 5000,
@@ -30,18 +30,22 @@ export async function claudeSearch(
   const prompt = `Search this codebase for information relevant to the following question. Return the most relevant code snippets with file paths and line numbers. Be concise and focus on the most important findings.\n\nQuestion: ${query}`;
 
   try {
-    const result = execSync(
-      `claude -p ${JSON.stringify(prompt)}`,
-      {
-        cwd: repoDir,
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-        maxBuffer: 2 * 1024 * 1024, // 2MB
-        timeout: timeoutMs,
-      },
-    );
+    const result = spawnSync("claude", ["-p", prompt], {
+      cwd: repoDir,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      maxBuffer: 2 * 1024 * 1024, // 2MB
+      timeout: timeoutMs,
+    });
 
-    const summary = result.trim();
+    if (result.error) {
+      throw result.error;
+    }
+    if (result.status !== 0) {
+      throw new Error(result.stderr?.slice(0, 500) ?? "Non-zero exit code");
+    }
+
+    const summary = (result.stdout ?? "").trim();
     return summary.length > MAX_SUMMARY_SIZE
       ? summary.slice(0, MAX_SUMMARY_SIZE)
       : summary;
