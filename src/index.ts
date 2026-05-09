@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { loginCommand } from "./commands/login.js";
 import { logoutCommand } from "./commands/logout.js";
+import { setupTokenCommand } from "./commands/setup-token.js";
 import { whoamiCommand } from "./commands/whoami.js";
 import { configCommand } from "./commands/config.js";
 import { usageCommand } from "./commands/usage.js";
@@ -33,6 +34,7 @@ program
 
 program.addCommand(loginCommand);
 program.addCommand(logoutCommand);
+program.addCommand(setupTokenCommand);
 program.addCommand(whoamiCommand);
 program.addCommand(configCommand);
 program.addCommand(usageCommand);
