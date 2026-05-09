@@ -1,5 +1,4 @@
 import { exec } from "node:child_process";
-import chalk from "chalk";
 import { info } from "./output.js";
 
 const MAX_POLL_ATTEMPTS = 200;
@@ -65,11 +64,13 @@ export async function runDeviceFlow(
 
   const authorizeUrl = `${apiUrl}/cli/authorize?code=${deviceCode}`;
 
+  // The URL is intentionally only emitted through onAuthorizeUrl so callers
+  // control its destination (stdout / stderr / silent). Never write it via
+  // log() — that would pollute stdout for stream-capturing callers.
   onAuthorizeUrl?.(authorizeUrl);
 
   log("");
-  log(noOpen ? "Open the following URL in your browser to authorize:" : "Opening browser to authorize...");
-  log(chalk.dim(authorizeUrl));
+  log(noOpen ? "Open the URL above in your browser to authorize." : "Opening browser to authorize...");
   log("");
 
   if (!noOpen) {

@@ -1,4 +1,5 @@
 import { Command } from "commander";
+import chalk from "chalk";
 import { setProfile, getApiUrl } from "../lib/config-store.js";
 import { success, error, info } from "../lib/output.js";
 import { withSpinner } from "../lib/spinner.js";
@@ -59,7 +60,9 @@ export const loginCommand = new Command("login")
         }
         await tokenFlow(opts.token, apiUrl, opts.profile);
       } else {
-        const result = await runDeviceFlow(apiUrl);
+        const result = await runDeviceFlow(apiUrl, {
+          onAuthorizeUrl: (url) => info(chalk.dim(url)),
+        });
 
         setProfile(opts.profile, {
           apiUrl,
