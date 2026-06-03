@@ -15,15 +15,15 @@ import type { ApiRepo } from "../types.js";
 function parseGitRemote(url: string): string | null {
   // SSH URL form: ssh://git@host[:port]/owner/repo.git
   const sshUrlMatch = url.match(/^ssh:\/\/[^/]+\/(.+?)(?:\.git)?\/?$/);
-  if (sshUrlMatch) return sshUrlMatch[1];
+  if (sshUrlMatch && sshUrlMatch[1].length > 0) return sshUrlMatch[1];
 
   // SSH scp-like form: git@github.com:owner/repo.git
   const sshMatch = url.match(/git@[^:]+:(.+?)(?:\.git)?\/?$/);
-  if (sshMatch) return sshMatch[1];
+  if (sshMatch && sshMatch[1].length > 0) return sshMatch[1];
 
   // HTTPS form (optional port): https://github.com[:port]/owner/repo.git
   const httpsMatch = url.match(/https?:\/\/[^/]+\/(.+?)(?:\.git)?\/?$/);
-  if (httpsMatch) return httpsMatch[1];
+  if (httpsMatch && httpsMatch[1].length > 0) return httpsMatch[1];
 
   return null;
 }

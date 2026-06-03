@@ -32,7 +32,8 @@ function parsePrArg(arg: string): { prNumber: number; repoFullName?: string } {
 
   // Try as a GitLab MR URL (self-hosted, custom host/port, nested subgroups).
   // GitLab separates the project path from the resource with "/-/".
-  const glMatch = arg.match(/\/\/[^/]+\/(.+?)\/-\/merge_requests\/(\d+)/);
+  // Anchor to http(s) so only real web URLs match, not arbitrary strings/schemes.
+  const glMatch = arg.match(/https?:\/\/[^/]+\/(.+?)\/-\/merge_requests\/(\d+)/);
   if (glMatch) {
     return { prNumber: parseInt(glMatch[2], 10), repoFullName: glMatch[1] };
   }
@@ -55,8 +56,8 @@ function localizeMessage(message: string, provider: string): string {
   if (provider.toLowerCase() !== "gitlab") return message;
   // Preserve the casing of the matched "P" → "M" so "Pull request" → "Merge request".
   return message
-    .replace(/pull(\s)request/gi, (_m, sp, offset, str) =>
-      (str[offset] === "P" ? "Merge" : "merge") + sp + "request",
+    .replace(/pull(\s)request/gi, (_m, sp) =>
+      (_m[0] === "P" ? "Merge" : "merge") + sp + "request",
     )
     .replace(/\bPRs\b/g, "MRs")
     .replace(/\bPR\b/g, "MR");
