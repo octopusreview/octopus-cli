@@ -4,19 +4,26 @@ import type { ApiRepo } from "../types.js";
 
 /**
  * Extract repo full name from git remote URL.
- * Supports both SSH and HTTPS formats:
+ * Supports SSH (scp-like and URL form) and HTTPS formats, including
+ * custom ports (self-hosted GitLab) and nested subgroup paths:
  * - git@github.com:owner/repo.git
  * - https://github.com/owner/repo.git
  * - git@bitbucket.org:owner/repo.git
+ * - ssh://git@gitlab.example.com:2222/group/subgroup/repo.git
+ * - https://gitlab.example.com:8443/group/subgroup/repo.git
  */
 function parseGitRemote(url: string): string | null {
-  // SSH format: git@github.com:owner/repo.git
-  const sshMatch = url.match(/git@[^:]+:([^/]+\/[^/]+?)(?:\.git)?$/);
-  if (sshMatch) return sshMatch[1];
+  // SSH URL form: ssh://git@host[:port]/owner/repo.git
+  const sshUrlMatch = url.match(/^ssh:\/\/[^/]+\/(.+?)(?:\.git)?\/?$/);
+  if (sshUrlMatch && sshUrlMatch[1].length > 0) return sshUrlMatch[1];
 
-  // HTTPS format: https://github.com/owner/repo.git
-  const httpsMatch = url.match(/https?:\/\/[^/]+\/([^/]+\/[^/]+?)(?:\.git)?$/);
-  if (httpsMatch) return httpsMatch[1];
+  // SSH scp-like form: git@github.com:owner/repo.git
+  const sshMatch = url.match(/git@[^:]+:(.+?)(?:\.git)?\/?$/);
+  if (sshMatch && sshMatch[1].length > 0) return sshMatch[1];
+
+  // HTTPS form (optional port): https://github.com[:port]/owner/repo.git
+  const httpsMatch = url.match(/https?:\/\/[^/]+\/(.+?)(?:\.git)?\/?$/);
+  if (httpsMatch && httpsMatch[1].length > 0) return httpsMatch[1];
 
   return null;
 }
