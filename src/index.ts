@@ -15,6 +15,7 @@ import { knowledgeCommand } from "./commands/knowledge/index.js";
 import { analyzeDepsCommand } from "./commands/analyze-deps.js";
 import { skillsCommand, checkSkillUpdates } from "./commands/skills.js";
 import { agentCommand } from "./commands/agent/index.js";
+import { updateCommand } from "./commands/update.js";
 
 let version = "0.0.0";
 try {
@@ -44,6 +45,7 @@ program.addCommand(knowledgeCommand);
 program.addCommand(analyzeDepsCommand);
 program.addCommand(skillsCommand);
 program.addCommand(agentCommand);
+program.addCommand(updateCommand);
 
 // Top-level alias: `octopus review` → `octopus pr review`
 program
