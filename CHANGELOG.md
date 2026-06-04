@@ -2,6 +2,21 @@
 
 All notable changes to Octopus CLI are documented in this file.
 
+## [0.1.16] - 2026-06-04
+
+### Added
+- `update` command to self-update the CLI to the latest version from npm (#30)
+
+## [0.1.15] - 2026-06-03
+
+### Added
+- Parse GitLab MR URLs and self-hosted SSH remotes, with provider-aware wording (#29)
+
+## [0.1.14] - 2026-05-09
+
+### Added
+- `setup-token` command for CI/CD-friendly token retrieval (#27)
+
 ## [0.1.13] - 2026-04-16
 
 ### Added
