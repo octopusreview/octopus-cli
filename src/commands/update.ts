@@ -1,23 +1,37 @@
 import { Command } from "commander";
 import { execSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import { success, error, info, warn } from "../lib/output.js";
 import { withSpinner } from "../lib/spinner.js";
+import { getVersion } from "../lib/version.js";
 
 const PKG_NAME = "@octp/cli";
 const REGISTRY_URL = `https://registry.npmjs.org/${PKG_NAME}/latest`;
 
-function getCurrentVersion(): string {
-  try {
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const pkg = JSON.parse(
-      readFileSync(join(__dirname, "..", "..", "package.json"), "utf-8"),
-    );
-    return pkg.version ?? "0.0.0";
-  } catch {
-    return "0.0.0";
+type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
+
+/**
+ * Best-effort detection of the package manager the CLI was installed with,
+ * inferred from this module's install path. Falls back to npm.
+ */
+function detectPackageManager(): PackageManager {
+  const path = fileURLToPath(import.meta.url).toLowerCase();
+  if (path.includes("pnpm")) return "pnpm";
+  if (path.includes("yarn")) return "yarn";
+  if (path.includes("bun")) return "bun";
+  return "npm";
+}
+
+function globalInstallCommand(pm: PackageManager, spec: string): string {
+  switch (pm) {
+    case "pnpm":
+      return `pnpm add -g ${spec}`;
+    case "yarn":
+      return `yarn global add ${spec}`;
+    case "bun":
+      return `bun add -g ${spec}`;
+    default:
+      return `npm install -g ${spec}`;
   }
 }
 
@@ -47,8 +61,8 @@ async function fetchLatestVersion(): Promise<string> {
 export const updateCommand = new Command("update")
   .description("Update Octopus CLI to the latest version from npm")
   .option("--check", "Only check for updates without installing")
-  .action(async (opts) => {
-    const current = getCurrentVersion();
+  .action(async (opts: { check?: boolean }): Promise<void> => {
+    const current = getVersion();
 
     let latest: string;
     try {
@@ -69,20 +83,21 @@ export const updateCommand = new Command("update")
       return;
     }
 
+    const spec = `${PKG_NAME}@latest`;
+    const installCmd = globalInstallCommand(detectPackageManager(), spec);
+
     if (opts.check) {
-      warn(
-        `A new version is available (${latest}). Run \`octopus update\` to install it.`,
-      );
+      warn(`A new version is available (${latest}). Run \`octopus update\` to install it.`);
       return;
     }
 
     try {
       await withSpinner(`Installing ${PKG_NAME}@${latest}`, async () => {
-        execSync(`npm install -g ${PKG_NAME}@latest`, { stdio: "ignore" });
+        execSync(installCmd, { stdio: "ignore" });
       });
     } catch (err) {
       error(`Update failed: ${(err as Error).message}`);
-      info(`Try running manually: npm install -g ${PKG_NAME}@latest`);
+      info(`Try running manually: ${installCmd}`);
       process.exitCode = 1;
       return;
     }
