@@ -1,7 +1,5 @@
 import { Command } from "commander";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { getVersion } from "./lib/version.js";
 import { loginCommand } from "./commands/login.js";
 import { logoutCommand } from "./commands/logout.js";
 import { setupTokenCommand } from "./commands/setup-token.js";
@@ -15,15 +13,9 @@ import { knowledgeCommand } from "./commands/knowledge/index.js";
 import { analyzeDepsCommand } from "./commands/analyze-deps.js";
 import { skillsCommand, checkSkillUpdates } from "./commands/skills.js";
 import { agentCommand } from "./commands/agent/index.js";
+import { updateCommand } from "./commands/update.js";
 
-let version = "0.0.0";
-try {
-  const __dirname = dirname(fileURLToPath(import.meta.url));
-  const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf-8"));
-  version = pkg.version ?? version;
-} catch {
-  // fall back to placeholder; CLI remains functional
-}
+const version = getVersion();
 
 const program = new Command();
 
@@ -44,6 +36,7 @@ program.addCommand(knowledgeCommand);
 program.addCommand(analyzeDepsCommand);
 program.addCommand(skillsCommand);
 program.addCommand(agentCommand);
+program.addCommand(updateCommand);
 
 // Top-level alias: `octopus review` → `octopus pr review`
 program
