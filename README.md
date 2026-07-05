@@ -4,9 +4,25 @@ Command-line interface for [Octopus](https://octopus-review.ai) — AI-powered P
 
 ## Installation
 
+**Recommended — native install** (a single, dependency-free `octp` binary):
+
+```bash
+# macOS / Linux
+curl -fsSL https://octopus-review.ai/install.sh | bash
+
+# Windows (PowerShell)
+powershell -c "irm https://octopus-review.ai/install.ps1 | iex"
+```
+
+**npm** — this package (`@octp/cli`, the `octopus` command), kept for backward compatibility:
+
 ```bash
 npm install -g @octp/cli
 ```
+
+New setups should prefer the native install (the actively developed CLI, invoked as
+`octp`); `@octp/cli` remains supported for existing users. Full CLI docs:
+<https://octopus-review.ai/docs/cli>.
 
 ## Authentication
 
