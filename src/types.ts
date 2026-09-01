@@ -25,7 +25,7 @@ export interface ApiRepo {
   indexDurationMs?: number;
   analysisStatus: string;
   analyzedAt: string | null;
-  analysis?: string;
+  analysis?: string | null;
   summary: string | null;
   purpose: string | null;
   autoReview: boolean;

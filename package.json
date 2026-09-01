@@ -12,6 +12,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "lint": "echo 'no lint configured'",
+    "test": "bun test",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .turbo node_modules"
   },

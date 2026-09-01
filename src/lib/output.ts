@@ -89,6 +89,7 @@ export function formatUsd(n: number): string {
 export function statusBadge(status: string): string {
   switch (status) {
     case "indexed":
+    case "analyzed":
     case "ready":
     case "completed":
     case "done":
