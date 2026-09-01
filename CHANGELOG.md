@@ -2,6 +2,11 @@
 
 All notable changes to Octopus CLI are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- `repo analyze` now recognizes the server's `analyzed` status (spinner previously never resolved), fails on unexpected statuses, and prints a preview of the analysis (#32)
+
 ## [0.1.16] - 2026-06-04
 
 ### Added

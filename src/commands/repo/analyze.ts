@@ -3,6 +3,7 @@ import { resolveRepo } from "../../lib/repo-resolver.js";
 import { apiPost, apiGet } from "../../lib/api-client.js";
 import { error, success, info } from "../../lib/output.js";
 import { createSpinner } from "../../lib/spinner.js";
+import { analysisOutcome } from "../../lib/analysis-status.js";
 import type { ApiRepo } from "../../types.js";
 
 export const repoAnalyzeCommand = new Command("analyze")
@@ -21,23 +22,37 @@ export const repoAnalyzeCommand = new Command("analyze")
       let analysisStatus = "analyzing";
       let attempts = 0;
       const maxAttempts = 200;
-      while (analysisStatus === "analyzing" && attempts < maxAttempts) {
+      while (analysisOutcome(analysisStatus) === "pending" && attempts < maxAttempts) {
         attempts++;
         await new Promise((r) => setTimeout(r, 3000));
         const { repo: updated } = await apiGet<{ repo: ApiRepo }>(
           `/api/cli/repos/${repo.id}/status`,
         );
         analysisStatus = updated.analysisStatus;
+        const outcome = analysisOutcome(analysisStatus);
 
-        if (analysisStatus === "done" || analysisStatus === "completed") {
+        if (outcome === "success") {
           spinner.succeed(`Analysis complete for ${repo.fullName}`);
-          if (updated.purpose) info(`Purpose: ${updated.purpose}`);
-          if (updated.summary) info(`Summary: ${updated.summary}`);
+          const preview = (updated.analysis ?? "")
+            .split("\n")
+            .filter((line) => line.trim() !== "")
+            .slice(0, 12);
+          if (preview.length > 0) {
+            for (const line of preview) info(line);
+          } else {
+            if (updated.purpose) info(`Purpose: ${updated.purpose}`);
+            if (updated.summary) info(`Summary: ${updated.summary}`);
+          }
           return;
         }
 
-        if (analysisStatus === "failed") {
+        if (outcome === "failed") {
           spinner.fail(`Analysis failed for ${repo.fullName}`);
+          process.exit(1);
+        }
+
+        if (outcome === "unexpected") {
+          spinner.fail(`Unexpected analysis status: ${analysisStatus}`);
           process.exit(1);
         }
       }
